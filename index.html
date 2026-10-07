@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="ru" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Учёт Филамента & Калькулятор 3D-Печати</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col selection:bg-sky-500 selection:text-white">
+
+    <!-- Top Navigation Header -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-sky-500/10 text-sky-400 rounded-xl border border-sky-500/20">
+                    <i data-lucide="disc" class="w-6 h-6 animate-spin-slow"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold bg-gradient-to-r from-sky-400 to-cyan-300 bg-clip-text text-transparent">
+                        Filament Studio
+                    </h1>
+                    <p class="text-xs text-slate-400">Учёт пластика и расчет себестоимости</p>
+                </div>
+            </div>
+
+            <!-- Stats Header Quick View -->
+            <div class="hidden md:flex items-center space-x-6 text-sm">
+                <div class="flex items-center space-x-2 bg-slate-800/60 px-3 py-1.5 rounded-lg border border-slate-700/50">
+                    <i data-lucide="layers" class="w-4 h-4 text-sky-400"></i>
+                    <span class="text-slate-400">Катушек:</span>
+                    <span id="stat-total-count" class="font-semibold text-slate-100">0</span>
+                </div>
+                <div class="flex items-center space-x-2 bg-slate-800/60 px-3 py-1.5 rounded-lg border border-slate-700/50">
+                    <i data-lucide="weight" class="w-4 h-4 text-emerald-400"></i>
+                    <span class="text-slate-400">Всего веса:</span>
+                    <span id="stat-total-weight" class="font-semibold text-slate-100">0 кг</span>
+                </div>
+                <div class="flex items-center space-x-2 bg-slate-800/60 px-3 py-1.5 rounded-lg border border-slate-700/50">
+                    <i data-lucide="wallet" class="w-4 h-4 text-amber-400"></i>
+                    <span class="text-slate-400">Стоимость запаса:</span>
+                    <span id="stat-total-value" class="font-semibold text-slate-100">0 ₸</span>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2">
+                <button onclick="exportData()" title="Экспорт данных" class="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition">
+                    <i data-lucide="download" class="w-5 h-5"></i>
+                </button>
+                <label title="Импорт данных" class="p-2 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition cursor-pointer">
+                    <i data-lucide="upload" class="w-5 h-5"></i>
+                    <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(event)">
+                </label>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        
+        <!-- Tab Buttons -->
+        <div class="flex border-b border-slate-800 mb-6 space-x-4">
+            <button id="tab-btn-inventory" onclick="switchTab('inventory')" 
+                class="tab-btn pb-3 px-4 text-sm font-medium border-b-2 border-sky-500 text-sky-400 flex items-center space-x-2 transition">
+                <i data-lucide="box" class="w-4 h-4"></i>
+                <span>Инвентарь пластика</span>
+                <span id="inventory-badge" class="ml-2 bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded-full text-xs">0</span>
+            </button>
+            <button id="tab-btn-calculator" onclick="switchTab('calculator')" 
+                class="tab-btn pb-3 px-4 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 transition">
+                <i data-lucide="calculator" class="w-4 h-4"></i>
+                <span>Калькулятор печати</span>
+            </button>
+        </div>
+
+        <!-- ================= INVENTORY TAB ================= -->
+        <section id="tab-inventory" class="space-y-6">
+            <!-- Search & Actions Bar -->
+            <div class="flex flex-col sm:flex-row gap-4 justify-between items-stretch sm:items-center">
+                <div class="relative flex-1 max-w-md">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                    <input type="text" id="search-input" oninput="renderFilaments()" placeholder="Поиск по бренду, типу или цвету..." 
+                           class="w-full bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-4 py-2.5 text-sm focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition placeholder:text-slate-500">
+                </div>
+
+                <div class="flex gap-3 items-center">
+                    <select id="filter-type" onchange="renderFilaments()" class="bg-slate-900 border border-slate-800 text-slate-300 text-sm rounded-xl px-3 py-2.5 focus:outline-none focus:border-sky-500">
+                        <option value="ALL">Все типы пластика</option>
+                        <option value="PLA">PLA</option>
+                        <option value="PETG">PETG</option>
+                        <option value="ABS">ABS</option>
+                        <option value="TPU">TPU</option>
+                        <option value="ASA">ASA</option>
+                        <option value="PC">PC</option>
+                        <option value="Nylon">Nylon</option>
+                        <option value="Other">Другой</option>
+                    </select>
+
+                    <button onclick="openFilamentModal()" 
+                            class="bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium px-4 py-2.5 rounded-xl flex items-center justify-center space-x-2 shadow-lg shadow-sky-600/20 transition active:scale-95">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        <span>Добавить пластик</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filament List Grid -->
+            <div id="filament-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Dynamic Filament Cards will be loaded here -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="empty-state" class="hidden flex-col items-center justify-center py-16 text-center border-2 border-dashed border-slate-800 rounded-2xl">
+                <div class="p-4 bg-slate-900 rounded-full text-slate-600 mb-3">
+                    <i data-lucide="package-open" class="w-8 h-8"></i>
+                </div>
+                <h3 class="text-base font-semibold text-slate-300">База пластика пуста</h3>
+                <p class="text-sm text-slate-500 max-w-sm mt-1">Добавьте вашу первую катушку филамента, чтобы отслеживать остатки и рассчитывать стоимость деталей.</p>
+                <button onclick="openFilamentModal()" class="mt-4 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium px-4 py-2 rounded-xl transition">
+                    + Добавить катушку
+                </button>
+            </div>
+        </section>
+
+        <!-- ================= CALCULATOR TAB ================= -->
+        <section id="tab-calculator" class="hidden space-y-6">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <!-- Inputs Column -->
+                <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 space-y-5">
+                    <div class="border-b border-slate-800 pb-4">
+                        <h2 class="text-base font-semibold text-slate-100 flex items-center space-x-2">
+                            <i data-lucide="sliders" class="w-5 h-5 text-sky-400"></i>
+                            <span>Параметры печати</span>
+                        </h2>
+                        <p class="text-xs text-slate-400 mt-0.5">Выберите используемый материал и вес готового изделия</p>
+                    </div>
+
+                    <!-- 1. Filament Selector & Visual Color Card -->
+                    <div class="space-y-3">
+                        <label class="block text-xs font-medium text-slate-300">Выберите филамент из базы</label>
+                        
+                        <!-- Visual Color Swatches Palette -->
+                        <div class="flex items-center space-x-2 overflow-x-auto pb-1">
+                            <span class="text-[11px] text-slate-400 font-medium mr-1 flex items-center space-x-1 shrink-0">
+                                <i data-lucide="palette" class="w-3.5 h-3.5 text-sky-400"></i>
+                                <span>Палитра:</span>
+                            </span>
+                            <div id="calc-color-swatches" class="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                                <!-- Swatches populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Dropdown Select & Color Disc Indicator -->
+                        <div class="flex items-center space-x-3">
+                            <div id="calc-filament-color-badge" class="w-12 h-12 rounded-xl border border-white/20 flex items-center justify-center flex-shrink-0 shadow-lg bg-slate-800 transition-all duration-300">
+                                <i data-lucide="disc" class="w-6 h-6 text-white drop-shadow-md"></i>
+                            </div>
+                            <select id="calc-filament-select" onchange="onCalcFilamentChange()" 
+                                    class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-sky-500 text-slate-100 font-medium">
+                                <!-- Options populated dynamically -->
+                            </select>
+                        </div>
+
+                        <!-- Selected Visual Filament Details Card -->
+                        <div id="calc-filament-preview-card" class="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs transition-all">
+                            <div class="flex items-center space-x-2.5">
+                                <span id="calc-card-color-dot" class="w-4 h-4 rounded-full border border-white/20 inline-block shadow-sm shrink-0"></span>
+                                <div class="flex items-center space-x-2 flex-wrap">
+                                    <span id="calc-card-brand-type" class="font-semibold text-slate-200"></span>
+                                    <span id="calc-card-type-badge" class="bg-sky-500/10 text-sky-400 font-bold px-1.5 py-0.5 rounded border border-sky-500/20 text-[10px]"></span>
+                                    <span class="text-slate-500">•</span>
+                                    <span id="calc-card-color-name" class="text-slate-300 font-medium"></span>
+                                    <span id="calc-card-hex" class="text-[10px] text-slate-500 font-mono"></span>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-4 text-slate-400 shrink-0">
+                                <span>Цена: <strong id="calc-price-kg-display" class="text-sky-400">0 ₸</strong></span>
+                                <span>Остаток: <span id="calc-weight-left-display" class="text-slate-300">0 г</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Weight input -->
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-2">Вес модели (включая поддержки) [грамм]</label>
+                        <div class="relative">
+                            <input type="number" id="calc-weight-input" min="0" step="0.1" value="50" oninput="calculateCost()"
+                                   placeholder="Например: 120"
+                                   class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-lg font-semibold text-slate-100 focus:outline-none focus:border-sky-500 pr-12">
+                            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium text-sm">г</span>
+                        </div>
+                    </div>
+
+                    <!-- Additional Extra Costs Collapsible Toggle -->
+                    <div class="border-t border-slate-800/80 pt-4">
+                        <button type="button" onclick="toggleAdvancedCalc()" class="flex items-center justify-between w-full text-xs font-medium text-sky-400 hover:text-sky-300">
+                            <span class="flex items-center space-x-1.5">
+                                <i data-lucide="settings-2" class="w-4 h-4"></i>
+                                <span>Дополнительные расходы (электричество, время)</span>
+                            </span>
+                            <i id="calc-advanced-icon" data-lucide="chevron-down" class="w-4 h-4 transition-transform duration-200"></i>
+                        </button>
+
+                        <div id="calc-advanced-panel" class="hidden space-y-4 mt-4 pt-2">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs text-slate-400 mb-1">Время печати (часов)</label>
+                                    <input type="number" id="calc-time-hours" min="0" step="0.5" value="0" oninput="calculateCost()"
+                                           class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-sky-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-slate-400 mb-1">Мощность принтера (Вт)</label>
+                                    <input type="number" id="calc-power-watt" min="0" value="150" oninput="calculateCost()"
+                                           class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-sky-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-slate-400 mb-1">Тариф электроэнергии (за кВт⋅ч)</label>
+                                    <input type="number" id="calc-electricity-rate" min="0" value="25" oninput="calculateCost()"
+                                           class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-sky-500">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-slate-400 mb-1">Амортизация принтера (в час)</label>
+                                    <input type="number" id="calc-wear-rate" min="0" value="50" oninput="calculateCost()"
+                                           class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-sky-500">
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs text-slate-400 mb-1">Наценка на продажу (%)</label>
+                                <input type="range" id="calc-margin-percent" min="0" max="300" step="5" value="100" oninput="calculateCost()"
+                                       class="w-full accent-sky-500 cursor-pointer">
+                                <div class="flex justify-between text-xs text-slate-500 mt-1">
+                                    <span>0% (Чистая себестоимость)</span>
+                                    <span id="calc-margin-label" class="text-sky-400 font-semibold">+100%</span>
+                                    <span>300%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Calculation Results Column -->
+                <div class="lg:col-span-5 flex flex-col justify-between bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6">
+                    <div class="space-y-6">
+                        <div class="border-b border-slate-800 pb-4 flex justify-between items-center">
+                            <h2 class="text-base font-semibold text-slate-100 flex items-center space-x-2">
+                                <i data-lucide="receipt" class="w-5 h-5 text-emerald-400"></i>
+                                <span>Расчёт себестоимости</span>
+                            </h2>
+                            <span class="text-xs font-mono bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                                Итоговый расчёт
+                            </span>
+                        </div>
+
+                        <!-- Main Big Result Box -->
+                        <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-4 text-center space-y-1">
+                            <span class="text-xs uppercase tracking-wider text-slate-400 font-medium">Себестоимость детали</span>
+                            <div id="calc-result-cost" class="text-3xl font-extrabold text-emerald-400 tracking-tight">
+                                0 ₸
+                            </div>
+                            <div id="calc-sell-price-wrapper" class="text-xs text-slate-400 pt-1 border-t border-slate-800/50 mt-2">
+                                Рекомендуемая цена продажи: <span id="calc-result-sell-price" class="font-semibold text-sky-300">0 ₸</span>
+                            </div>
+                        </div>
+
+                        <!-- Breakdown Details -->
+                        <div class="space-y-2.5 text-sm">
+                            <div class="flex justify-between items-center py-1.5 border-b border-slate-800/50">
+                                <span class="text-slate-400 flex items-center space-x-2">
+                                    <i data-lucide="disc" class="w-4 h-4 text-sky-400"></i>
+                                    <span>Затраты на пластик:</span>
+                                </span>
+                                <span id="calc-breakdown-filament" class="font-medium text-slate-200">0 ₸</span>
+                            </div>
+
+                            <div class="flex justify-between items-center py-1.5 border-b border-slate-800/50">
+                                <span class="text-slate-400 flex items-center space-x-2">
+                                    <i data-lucide="zap" class="w-4 h-4 text-amber-400"></i>
+                                    <span>Электроэнергия:</span>
+                                </span>
+                                <span id="calc-breakdown-electricity" class="font-medium text-slate-200">0 ₸</span>
+                            </div>
+
+                            <div class="flex justify-between items-center py-1.5 border-b border-slate-800/50">
+                                <span class="text-slate-400 flex items-center space-x-2">
+                                    <i data-lucide="wrench" class="w-4 h-4 text-slate-400"></i>
+                                    <span>Амортизация:</span>
+                                </span>
+                                <span id="calc-breakdown-wear" class="font-medium text-slate-200">0 ₸</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action: Deduct from Spool -->
+                    <div class="mt-6 pt-4 border-t border-slate-800">
+                        <button id="btn-deduct-weight" onclick="deductWeightFromSpool()" 
+                                class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-3 rounded-xl flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/20 transition active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i data-lucide="minus-circle" class="w-4 h-4"></i>
+                            <span>Списать вес с катушки в базе</span>
+                        </button>
+                        <p class="text-[11px] text-slate-500 text-center mt-2">
+                            Вычитает указанный вес из выбранной катушки в инвентаре
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ================= ADD / EDIT MODAL ================= -->
+    <div id="filament-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl relative space-y-4">
+            
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 id="modal-title" class="text-base font-semibold text-slate-100 flex items-center space-x-2">
+                    <i data-lucide="plus-circle" class="w-5 h-5 text-sky-400"></i>
+                    <span>Добавить катушку</span>
+                </h3>
+                <button onclick="closeFilamentModal()" class="text-slate-400 hover:text-slate-200 p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form id="filament-form" onsubmit="handleFormSubmit(event)" class="space-y-4">
+                <input type="hidden" id="filament-id">
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Бренд / Производитель</label>
+                        <input type="text" id="input-brand" required placeholder="FDPlast, Esun, eSUN..." 
+                               class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Тип пластика</label>
+                        <select id="input-type" required class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
+                            <option value="PLA">PLA</option>
+                            <option value="PETG">PETG</option>
+                            <option value="ABS">ABS</option>
+                            <option value="TPU">TPU</option>
+                            <option value="ASA">ASA</option>
+                            <option value="PC">PC</option>
+                            <option value="Nylon">Nylon</option>
+                            <option value="Other">Другой</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3 items-center">
+                    <div class="col-span-2">
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Название цвета</label>
+                        <input type="text" id="input-color-name" required placeholder="Черный, Синий металлик..." 
+                               class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Цвет катушки</label>
+                        <div class="flex items-center space-x-2">
+                            <input type="color" id="input-color-hex" value="#0ea5e9" 
+                                   class="w-10 h-9 bg-transparent border-0 cursor-pointer rounded">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Остаток веса (грамм)</label>
+                        <input type="number" id="input-weight" required min="0" step="1" placeholder="1000" 
+                               class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1">Цена за 1 кг</label>
+                        <input type="number" id="input-price" required min="0" step="10" placeholder="7500" 
+                               class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-300 mb-1">Заметки / Диламетр (опционально)</label>
+                    <input type="text" id="input-notes" placeholder="1.75мм, сопло 210°C, стол 60°C" 
+                           class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500">
+                </div>
+
+                <div class="flex justify-end space-x-3 pt-3 border-t border-slate-800">
+                    <button type="button" onclick="closeFilamentModal()" 
+                            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-xl transition">
+                        Отмена
+                    </button>
+                    <button type="submit" 
+                            class="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-xl shadow-lg shadow-sky-600/20 transition">
+                        Сохранить
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal for Delete -->
+    <div id="confirm-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-6 shadow-2xl space-y-4">
+            <div class="p-3 bg-red-500/10 text-red-400 rounded-xl w-fit border border-red-500/20">
+                <i data-lucide="alert-triangle" class="w-6 h-6"></i>
+            </div>
+            <div>
+                <h3 class="text-base font-semibold text-slate-100">Удалить катушку?</h3>
+                <p id="confirm-text" class="text-xs text-slate-400 mt-1">Это действие нельзя будет отменить.</p>
+            </div>
+            <div class="flex justify-end space-x-3 pt-2">
+                <button onclick="closeConfirmModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-xl transition">
+                    Отмена
+                </button>
+                <button id="btn-confirm-delete" class="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-medium rounded-xl shadow-lg shadow-red-600/20 transition">
+                    Удалить
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 space-y-2 pointer-events-none"></div>
+
+    <script>
+        // Default initial filaments sample data if local storage is empty
+        const DEFAULT_FILAMENTS = [
+            {
+                id: 'fil_1',
+                brand: 'Kingroon',
+                type: 'PLA',
+                colorName: 'Черный Классик',
+                colorHex: '#1e293b',
+                weightGrams: 850,
+                pricePerKg: 6500,
+                notes: 'Температура: 200°C / Стол: 60°C'
+            },
+            {
+                id: 'fil_2',
+                brand: 'FDPlast',
+                type: 'PETG',
+                colorName: 'Ярко-Синий',
+                colorHex: '#0284c7',
+                weightGrams: 1000,
+                pricePerKg: 7200,
+                notes: 'Прочный пластик для деталей'
+            },
+            {
+                id: 'fil_3',
+                brand: 'eSUN',
+                type: 'TPU',
+                colorName: 'Красный Флекс',
+                colorHex: '#ef4444',
+                weightGrams: 420,
+                pricePerKg: 11000,
+                notes: 'Гибкий 95A'
+            }
+        ];
+
+        // State variables
+        let filaments = [];
+        let deleteTargetId = null;
+
+        // Initialize application on page load
+        window.onload = function() {
+            lucide.createIcons();
+            loadFilaments();
+            renderFilaments();
+            updateStats();
+            populateCalculatorDropdown();
+            calculateCost();
+        };
+
+        // Storage Functions
+        function loadFilaments() {
+            const stored = localStorage.getItem('filament_db_v1');
+            if (stored) {
+                try {
+                    filaments = JSON.parse(stored);
+                } catch (e) {
+                    console.error("Error loading filaments:", e);
+                    filaments = [...DEFAULT_FILAMENTS];
+                }
+            } else {
+                filaments = [...DEFAULT_FILAMENTS];
+                saveFilamentsToStorage();
+            }
+        }
+
+        function saveFilamentsToStorage() {
+            localStorage.setItem('filament_db_v1', JSON.stringify(filaments));
+            updateStats();
+            populateCalculatorDropdown();
+        }
+
+        // Navigation Tabs
+        function switchTab(tabName) {
+            const invTab = document.getElementById('tab-inventory');
+            const calcTab = document.getElementById('tab-calculator');
+            const btnInv = document.getElementById('tab-btn-inventory');
+            const btnCalc = document.getElementById('tab-btn-calculator');
+
+            if (tabName === 'inventory') {
+                invTab.classList.remove('hidden');
+                calcTab.classList.add('hidden');
+                btnInv.className = 'tab-btn pb-3 px-4 text-sm font-medium border-b-2 border-sky-500 text-sky-400 flex items-center space-x-2 transition';
+                btnCalc.className = 'tab-btn pb-3 px-4 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 transition';
+            } else {
+                invTab.classList.add('hidden');
+                calcTab.classList.remove('hidden');
+                btnCalc.className = 'tab-btn pb-3 px-4 text-sm font-medium border-b-2 border-sky-500 text-sky-400 flex items-center space-x-2 transition';
+                btnInv.className = 'tab-btn pb-3 px-4 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center space-x-2 transition';
+                calculateCost();
+            }
+            lucide.createIcons();
+        }
+
+        function renderFilaments() {
+            const grid = document.getElementById('filament-grid');
+            const emptyState = document.getElementById('empty-state');
+            const searchVal = document.getElementById('search-input').value.toLowerCase().trim();
+            const typeFilter = document.getElementById('filter-type').value;
+
+            // Update Badge Count
+            document.getElementById('inventory-badge').textContent = filaments.length;
+
+            const filtered = filaments.filter(f => {
+                const matchesSearch = f.brand.toLowerCase().includes(searchVal) || 
+                                      f.type.toLowerCase().includes(searchVal) || 
+                                      f.colorName.toLowerCase().includes(searchVal);
+                const matchesType = typeFilter === 'ALL' || f.type === typeFilter;
+                return matchesSearch && matchesType;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+                emptyState.classList.remove('flex');
+            }
+
+            grid.innerHTML = filtered.map(f => {
+                const itemValue = Math.round((f.weightGrams / 1000) * f.pricePerKg);
+                return `
+                    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between space-y-3 hover:border-slate-700/80 transition shadow-lg relative group">
+                        
+                        <!-- Top Info -->
+                        <div class="flex items-start justify-between">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-xl border border-white/10 flex items-center justify-center shadow-inner" style="background-color: ${f.colorHex};">
+                                    <i data-lucide="disc" class="w-5 h-5 text-white/80 drop-shadow"></i>
+                                </div>
+                                <div>
+                                    <div class="flex items-center space-x-2">
+                                        <span class="font-bold text-slate-100 text-sm">${escapeHtml(f.brand)}</span>
+                                        <span class="bg-slate-800 text-sky-400 text-[10px] font-semibold px-2 py-0.5 rounded-md border border-slate-700">
+                                            ${f.type}
+                                        </span>
+                                    </div>
+                                    <div class="text-xs text-slate-400 flex items-center space-x-1 mt-0.5">
+                                        <span>${escapeHtml(f.colorName)}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="flex items-center space-x-1 opacity-90 group-hover:opacity-100">
+                                <button onclick="openFilamentModal('${f.id}')" title="Редактировать" class="p-1.5 text-slate-400 hover:text-sky-400 hover:bg-slate-800 rounded-lg transition">
+                                    <i data-lucide="pencil" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="promptDelete('${f.id}')" title="Удалить" class="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Spool Weight Progress Bar -->
+                        <div class="space-y-1">
+                            <div class="flex justify-between text-xs">
+                                <span class="text-slate-400">Остаток: <strong class="text-slate-200 font-semibold">${f.weightGrams} г</strong></span>
+                                <span class="text-slate-400">Запас: <strong class="text-emerald-400 font-medium">${itemValue.toLocaleString()} ₸</strong></span>
+                            </div>
+                            <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
+                                <div class="bg-gradient-to-r from-sky-500 to-emerald-400 h-2 rounded-full transition-all duration-300" style="width: ${Math.min(100, (f.weightGrams / 1000) * 100)}%;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Footer Details -->
+                        <div class="pt-2 border-t border-slate-800/60 flex items-center justify-between text-xs text-slate-400">
+                            <div>Цена: <span class="text-slate-300 font-medium">${f.pricePerKg.toLocaleString()} ₸/кг</span></div>
+                            ${f.notes ? `<div class="truncate max-w-[140px] text-slate-500" title="${escapeHtml(f.notes)}">${escapeHtml(f.notes)}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            lucide.createIcons();
+        }
+
+        function updateStats() {
+            const totalCount = filaments.length;
+            const totalWeightGrams = filaments.reduce((acc, curr) => acc + (Number(curr.weightGrams) || 0), 0);
+            const totalValue = filaments.reduce((acc, curr) => {
+                const kg = (Number(curr.weightGrams) || 0) / 1000;
+                return acc + (kg * (Number(curr.pricePerKg) || 0));
+            }, 0);
+
+            document.getElementById('stat-total-count').textContent = totalCount;
+            document.getElementById('stat-total-weight').textContent = (totalWeightGrams / 1000).toFixed(2) + ' кг';
+            document.getElementById('stat-total-value').textContent = Math.round(totalValue).toLocaleString() + ' ₸';
+        }
+
+        function openFilamentModal(id = null) {
+            const modal = document.getElementById('filament-modal');
+            const title = document.getElementById('modal-title');
+            
+            if (id) {
+                const item = filaments.find(f => f.id === id);
+                if (!item) return;
+                title.querySelector('span').textContent = 'Редактировать катушку';
+                document.getElementById('filament-id').value = item.id;
+                document.getElementById('input-brand').value = item.brand;
+                document.getElementById('input-type').value = item.type;
+                document.getElementById('input-color-name').value = item.colorName;
+                document.getElementById('input-color-hex').value = item.colorHex || '#0ea5e9';
+                document.getElementById('input-weight').value = item.weightGrams;
+                document.getElementById('input-price').value = item.pricePerKg;
+                document.getElementById('input-notes').value = item.notes || '';
+            } else {
+                title.querySelector('span').textContent = 'Добавить катушку';
+                document.getElementById('filament-form').reset();
+                document.getElementById('filament-id').value = '';
+                document.getElementById('input-color-hex').value = '#0ea5e9';
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeFilamentModal() {
+            document.getElementById('filament-modal').classList.add('hidden');
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const id = document.getElementById('filament-id').value;
+            const brand = document.getElementById('input-brand').value.trim();
+            const type = document.getElementById('input-type').value;
+            const colorName = document.getElementById('input-color-name').value.trim();
+            const colorHex = document.getElementById('input-color-hex').value;
+            const weightGrams = parseFloat(document.getElementById('input-weight').value) || 0;
+            const pricePerKg = parseFloat(document.getElementById('input-price').value) || 0;
+            const notes = document.getElementById('input-notes').value.trim();
+
+            if (id) {
+                // Update existing
+                const index = filaments.findIndex(f => f.id === id);
+                if (index !== -1) {
+                    filaments[index] = { id, brand, type, colorName, colorHex, weightGrams, pricePerKg, notes };
+                    showToast('Катушка успешно обновлена');
+                }
+            } else {
+                // Add new
+                const newFilament = {
+                    id: 'fil_' + Date.now(),
+                    brand, type, colorName, colorHex, weightGrams, pricePerKg, notes
+                };
+                filaments.push(newFilament);
+                showToast('Новый пластик добавлен в инвентарь');
+            }
+
+            saveFilamentsToStorage();
+            renderFilaments();
+            closeFilamentModal();
+        }
+
+        // Delete Dialog
+        function promptDelete(id) {
+            deleteTargetId = id;
+            const item = filaments.find(f => f.id === id);
+            if (!item) return;
+            
+            document.getElementById('confirm-text').textContent = `Вы действительно хотите удалить "${item.brand} ${item.type} (${item.colorName})"?`;
+            document.getElementById('btn-confirm-delete').onclick = confirmDelete;
+            document.getElementById('confirm-modal').classList.remove('hidden');
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('confirm-modal').classList.add('hidden');
+            deleteTargetId = null;
+        }
+
+        function confirmDelete() {
+            if (deleteTargetId) {
+                filaments = filaments.filter(f => f.id !== deleteTargetId);
+                saveFilamentsToStorage();
+                renderFilaments();
+                showToast('Катушка удалена');
+            }
+            closeConfirmModal();
+        }
+
+        function populateCalculatorDropdown() {
+            const select = document.getElementById('calc-filament-select');
+            const colorSwatchesContainer = document.getElementById('calc-color-swatches');
+            const currentSelected = select ? select.value : null;
+            
+            if (select) select.innerHTML = '';
+            if (colorSwatchesContainer) colorSwatchesContainer.innerHTML = '';
+
+            if (filaments.length === 0) {
+                if (select) select.innerHTML = `<option value="">-- База пластика пуста --</option>`;
+                if (colorSwatchesContainer) {
+                    colorSwatchesContainer.innerHTML = `<span class="text-xs text-slate-500">Нет доступных катушек</span>`;
+                }
+                onCalcFilamentChange();
+                return;
+            }
+
+            filaments.forEach(f => {
+                // Populate Dropdown Option
+                if (select) {
+                    const opt = document.createElement('option');
+                    opt.value = f.id;
+                    opt.textContent = `[${f.type}] ${f.brand} — ${f.colorName} (${f.pricePerKg.toLocaleString()} ₸/кг)`;
+                    select.appendChild(opt);
+                }
+
+                // Populate Visual Color Swatches Buttons
+                if (colorSwatchesContainer) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.onclick = () => selectFilamentById(f.id);
+                    btn.className = `group relative w-7 h-7 rounded-lg border border-white/20 flex items-center justify-center transition-all transform hover:scale-110 focus:outline-none`;
+                    btn.style.backgroundColor = f.colorHex || '#0ea5e9';
+                    btn.title = `[${f.type}] ${f.brand} - ${f.colorName}`;
+                    btn.dataset.id = f.id;
+                    btn.innerHTML = `<i data-lucide="disc" class="w-3.5 h-3.5 text-white/80 drop-shadow opacity-0 group-hover:opacity-100 transition-opacity"></i>`;
+                    colorSwatchesContainer.appendChild(btn);
+                }
+            });
+
+            if (currentSelected && filaments.some(f => f.id === currentSelected)) {
+                if (select) select.value = currentSelected;
+            }
+
+            onCalcFilamentChange();
+        }
+
+        function selectFilamentById(id) {
+            const select = document.getElementById('calc-filament-select');
+            if (select) {
+                select.value = id;
+                onCalcFilamentChange();
+            }
+        }
+
+        function onCalcFilamentChange() {
+            const select = document.getElementById('calc-filament-select');
+            const selectedId = select ? select.value : '';
+            const item = filaments.find(f => f.id === selectedId);
+
+            const badge = document.getElementById('calc-filament-color-badge');
+            const colorDot = document.getElementById('calc-card-color-dot');
+            const colorName = document.getElementById('calc-card-color-name');
+            const hexText = document.getElementById('calc-card-hex');
+            const brandType = document.getElementById('calc-card-brand-type');
+            const typeBadge = document.getElementById('calc-card-type-badge');
+
+            // Highlight selected color swatch ring
+            document.querySelectorAll('#calc-color-swatches button').forEach(btn => {
+                if (btn.dataset.id === selectedId) {
+                    btn.classList.add('ring-2', 'ring-sky-400', 'scale-110', 'shadow-lg');
+                } else {
+                    btn.classList.remove('ring-2', 'ring-sky-400', 'scale-110', 'shadow-lg');
+                }
+            });
+
+            if (item) {
+                if (badge) {
+                    badge.style.backgroundColor = item.colorHex || '#0ea5e9';
+                    badge.style.boxShadow = `0 0 18px ${item.colorHex}66`;
+                }
+                if (colorDot) colorDot.style.backgroundColor = item.colorHex || '#0ea5e9';
+                if (colorName) colorName.textContent = item.colorName;
+                if (hexText) hexText.textContent = item.colorHex || '#0ea5e9';
+                if (brandType) brandType.textContent = item.brand;
+                if (typeBadge) typeBadge.textContent = item.type;
+
+                document.getElementById('calc-price-kg-display').textContent = `${item.pricePerKg.toLocaleString()} ₸`;
+                document.getElementById('calc-weight-left-display').textContent = `${item.weightGrams} г`;
+                document.getElementById('btn-deduct-weight').disabled = false;
+            } else {
+                if (badge) {
+                    badge.style.backgroundColor = '#1e293b';
+                    badge.style.boxShadow = 'none';
+                }
+                if (colorDot) colorDot.style.backgroundColor = '#64748b';
+                if (colorName) colorName.textContent = 'Не выбран';
+                if (hexText) hexText.textContent = '#---';
+                if (brandType) brandType.textContent = '—';
+                if (typeBadge) typeBadge.textContent = '—';
+
+                document.getElementById('calc-price-kg-display').textContent = `0 ₸`;
+                document.getElementById('calc-weight-left-display').textContent = `0 г`;
+                document.getElementById('btn-deduct-weight').disabled = true;
+            }
+
+            calculateCost();
+            lucide.createIcons();
+        }
+
+        function calculateCost() {
+            const select = document.getElementById('calc-filament-select');
+            const item = filaments.find(f => f.id === select.value);
+            const weightGrams = parseFloat(document.getElementById('calc-weight-input').value) || 0;
+
+            // Extra parameters
+            const printHours = parseFloat(document.getElementById('calc-time-hours').value) || 0;
+            const powerWatts = parseFloat(document.getElementById('calc-power-watt').value) || 0;
+            const elecRate = parseFloat(document.getElementById('calc-electricity-rate').value) || 0;
+            const wearRate = parseFloat(document.getElementById('calc-wear-rate').value) || 0;
+            const marginPercent = parseFloat(document.getElementById('calc-margin-percent').value) || 0;
+
+            document.getElementById('calc-margin-label').textContent = `+${marginPercent}%`;
+
+            if (!item) {
+                document.getElementById('calc-result-cost').textContent = '0 ₸';
+                document.getElementById('calc-breakdown-filament').textContent = '0 ₸';
+                document.getElementById('calc-breakdown-electricity').textContent = '0 ₸';
+                document.getElementById('calc-breakdown-wear').textContent = '0 ₸';
+                document.getElementById('calc-result-sell-price').textContent = '0 ₸';
+                return;
+            }
+
+            // 1. Filament cost
+            const filamentCost = (weightGrams / 1000) * item.pricePerKg;
+
+            // 2. Electricity cost = (Watts / 1000) * hours * elecRate
+            const elecCost = (powerWatts / 1000) * printHours * elecRate;
+
+            // 3. Wear cost = hours * wearRate
+            const wearCost = printHours * wearRate;
+
+            // Total net self-cost
+            const totalNetCost = filamentCost + elecCost + wearCost;
+
+            // Sell price with margin
+            const sellPrice = totalNetCost * (1 + (marginPercent / 100));
+
+            // Update DOM
+            document.getElementById('calc-result-cost').textContent = `${Math.round(totalNetCost).toLocaleString()} ₸`;
+            document.getElementById('calc-breakdown-filament').textContent = `${Math.round(filamentCost).toLocaleString()} ₸`;
+            document.getElementById('calc-breakdown-electricity').textContent = `${Math.round(elecCost).toLocaleString()} ₸`;
+            document.getElementById('calc-breakdown-wear').textContent = `${Math.round(wearCost).toLocaleString()} ₸`;
+            document.getElementById('calc-result-sell-price').textContent = `${Math.round(sellPrice).toLocaleString()} ₸`;
+        }
+
+        function deductWeightFromSpool() {
+            const select = document.getElementById('calc-filament-select');
+            const item = filaments.find(f => f.id === select.value);
+            const weightGrams = parseFloat(document.getElementById('calc-weight-input').value) || 0;
+
+            if (!item) {
+                showToast('Выберите катушку для списания', 'error');
+                return;
+            }
+
+            if (weightGrams <= 0) {
+                showToast('Укажите корректный вес детали', 'error');
+                return;
+            }
+
+            if (item.weightGrams < weightGrams) {
+                showToast(`Недостаточно вес на катушке! Доступно: ${item.weightGrams}г`, 'error');
+            }
+
+            item.weightGrams = Math.max(0, Math.round(item.weightGrams - weightGrams));
+            saveFilamentsToStorage();
+            renderFilaments();
+            onCalcFilamentChange();
+
+            showToast(`Списано ${weightGrams}г с катушки "${item.brand} ${item.type}"`);
+        }
+
+        function toggleAdvancedCalc() {
+            const panel = document.getElementById('calc-advanced-panel');
+            const icon = document.getElementById('calc-advanced-icon');
+            if (panel.classList.contains('hidden')) {
+                panel.classList.remove('hidden');
+                icon.style.transform = 'rotate(180deg)';
+            } else {
+                panel.classList.add('hidden');
+                icon.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        // Toast Notification System
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `px-4 py-3 rounded-xl text-sm font-medium text-white shadow-xl flex items-center space-x-2 transition-all transform translate-y-2 opacity-0 pointer-events-auto ${
+                type === 'error' ? 'bg-red-600 border border-red-500' : 'bg-slate-800 border border-slate-700 text-sky-300'
+            }`;
+            
+            toast.innerHTML = `
+                <i data-lucide="${type === 'error' ? 'alert-circle' : 'check-circle'}" class="w-4 h-4"></i>
+                <span>${escapeHtml(message)}</span>
+            `;
+
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // JSON Data Import / Export
+        function exportData() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(filaments, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `filament_stash_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showToast('База филамента экспортирована в файл');
+        }
+
+        function importData(event) {
+            const fileReader = new FileReader();
+            fileReader.onload = function(e) {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (Array.isArray(parsed)) {
+                        filaments = parsed;
+                        saveFilamentsToStorage();
+                        renderFilaments();
+                        showToast('Данные успешно импортированы');
+                    } else {
+                        showToast('Неверный формат файла', 'error');
+                    }
+                } catch (err) {
+                    showToast('Ошибка при чтении файла', 'error');
+                }
+            };
+            if (event.target.files[0]) {
+                fileReader.readAsText(event.target.files[0]);
+            }
+        }
+
+        // Utility: HTML Escaping
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+    </script>
+</body>
+</html>
